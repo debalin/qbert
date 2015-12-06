@@ -1,0 +1,10 @@
+# 123D Sculpt Obj Exporter material file 
+# File Created : Sat Aug 16 13:08:28 2014
+
+newmtl SculptMaterial
+illum 1
+Ka 1 1 1
+Kd 1 1 1
+Ks 1 1 1
+map_Kd Creature.png
+map_Ka Creature.png

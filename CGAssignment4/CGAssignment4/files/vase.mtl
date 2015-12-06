@@ -1,0 +1,25 @@
+# 3ds Max Wavefront OBJ Exporter v0.97b - (c)2007 guruware
+# File Created: 09.09.2014 14:12:21
+
+newmtl vase_plant
+	Ns 10.0000
+	Ni 1.5000
+	d 1.0000
+	Tr 0.0000
+	Tf 1.0000 1.0000 1.0000
+	illum 2
+	mask 1
+	Kd 0.0000 1.0000 0.0000
+	map_Kd vase_plant_d.jpg
+
+newmtl vase_round
+	Ns 10.0000
+	Ni 1.5000
+	d 1.0000
+	Tr 0.0000
+	Tf 1.0000 1.0000 1.0000 
+	illum 2
+	mask 0
+	Kd 0.5880 0.5880 0.5880
+	map_Kd vase_round_d.jpg
+	

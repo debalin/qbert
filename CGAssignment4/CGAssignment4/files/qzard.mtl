@@ -1,0 +1,18 @@
+#
+#
+#
+
+newmtl Qzard_Material106
+illum 2
+Ka 0 0 0
+Kd 0 0 0
+Ks 0 0 0
+
+newmtl Qzard_Material107
+illum 2
+Ka 0.588000 0.588000 0.588000
+Kd 0.588000 0.588000 0.588000
+Ks 0.000000 0.000000 0.000000
+Ns 2.000000
+map_Kd QzardB.png
+
