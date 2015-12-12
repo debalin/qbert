@@ -1,7 +1,5 @@
 #include <windows.h>
 #include <stdio.h>
-#include <thread>
-#include <chrono> 
 #include <stdlib.h>
 #include <vector>
 #include <list>
@@ -37,38 +35,27 @@ using namespace glm;
 
 class Rasterize {
 
-private:
-	static bool compareNoCase(string first, string second);
-
 public:
 	struct ShaderInfo {
 		GLuint programId;
 	};
 	struct Triangle {
-		int vertexIndices[3];
-		int normalIndices[3];
-		int textureIndices[3];
+		int vertexIndices[3], normalIndices[3], textureIndices[3];
 		unsigned int bufferIndices[3];
 		glm::vec3 faceNormal;
 		string groupName;
 	};
 	struct Light {
-		glm::vec3 location;
-		glm::vec3 la;
-		glm::vec3 ls;
-		glm::vec3 ld;
+		glm::vec3 location, la, ls, ld;
 	};
 	struct MTL {
-		glm::vec3 ka;
-		glm::vec3 ks;
-		glm::vec3 kd;
+		glm::vec3 ka, ks, kd;
 		float N;
 		string texturePath;
 		GLuint textureID;
 	};
 	struct ModelInfo {
-		std::vector<glm::vec3> verticesVec;
-		std::vector<glm::vec3> normalsVec;
+		std::vector<glm::vec3> verticesVec, normalsVec;
 		std::vector<glm::vec2> textureVec;
 		std::vector<Triangle *> triangles;
 		GLfloat maxX, maxY, maxZ, minX, minY, minZ;
@@ -80,16 +67,14 @@ public:
 		}
 	};
 	struct IndexInfo {
-		int startIndex;
-		int size;
+		int startIndex, size;
 		IndexInfo(int startIndexInp, int sizeInp) {
 			startIndex = startIndexInp;
 			size = sizeInp;
 		}
 	};
 	struct Primitive {
-		glm::vec3 vertex;
-		glm::vec3 normal;
+		glm::vec3 vertex, normal;
 		glm::vec2 textureUV;
 	};
 	struct Element {
@@ -97,33 +82,25 @@ public:
 		glm::mat4 initTransform, transform;
 		glm::vec3 initTranslate;
 		ModelInfo *modelInfo;
-		GLuint vertexArray;
-		GLuint primitiveBuffer;
-		GLuint indexBuffer;
+		GLuint vertexArray, primitiveBuffer, indexBuffer;
 		BUF_INDEX bufferIndex;
 		MTL_TRIANGLES trianglesInMTL;
 		MTL_INDICES indexInfo;
-		bool stepped;
-		bool display;
+		bool stepped, display, enemyDead, movedFlag;
+		int lives;
+		int stateX, stateY, initDirection, direction;
+		GLfloat velocityX, velocityY;
 	};
 	struct FontInfo {
-		GLuint fontTextureID;
-		GLuint fontArray;
-		GLuint fontUVBufferID;
-		GLuint fontVertexBufferID;
+		GLuint fontTextureID, fontArray, fontUVBufferID, fontVertexBufferID;
 	};
 
 	std::vector<Light *> lights;
 	glm::vec3 eyeLocation;
-	glm::vec3 lookAtVector;
-	glm::vec3 lookUpVector;
 	float nearZ;
-	bool smoothingOpt;
+	bool smoothingOpt, lightSwitch;
 	ShaderInfo info;
-	string baseDir;
 	FontInfo fontInfo;
-	bool lightSwitch;
-	glm::mat4 qbertTransform;
 
 	Rasterize();
 	~Rasterize();
@@ -140,6 +117,10 @@ public:
 	int glInitialize();
 	int parseBoard();
 	int parseQbert();
+	int parseCreatures();
+	void controlCreatures();
+	void showMenu();
+	void checkCollisions();
 	int buildElement(Element *node, glm::mat4 parentTransform, std::ifstream &inputFile);
 	void initFonts();
 	void writeOnScreen(string text, int startX, int startY, int sizeOfLetter, glm::vec3 color);

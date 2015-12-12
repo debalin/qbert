@@ -4,21 +4,30 @@
 * Q*bert!
 *********************************************************************************************************************/
 
-int windowHeight, windowWidth, fittingWidth;
-std::vector<Rasterize::Element *> nodes;
+clock_t levelStartTime;
+int windowHeight, windowWidth, fittingWidth, score = 0, cubeCount = 0, level = 1, redBallDead = 0, iterationCount1 = 1, iterationCount2 = 1; 
 double frameTime, framesPerSec;
-int stateX, stateY, score = 0, lives = 3, cubeCount = 0, level = 1; 
-std::vector<std::vector<Rasterize::Element *> *> grid;
-std::vector<Rasterize::Element *> qbertLives;
-Rasterize::Element *qbert;
+bool alive = true, pause = false, levelOver = false, gameOver = false, levelEnd = false,  purpleTransformed = false, bufferWait = true, movedFlag = false, killedFlag = false, onRightDisk = false, onLeftDisk = false, coilyAnimFlag = false;
+GLfloat scaleCubeAnim, rotateCubeAnim, scaleQbertAnim, rotateDiskAnim, scaleCoilyAnim, rotateCoilyAnim, rotateQbert;
 GLuint pVariable, vVariable, tVariable, textPresentVar, textureIDVar, kaVar, kdVar, ksVar, NVar, fontVar, cVar;
-ALuint sourceHop, bufferHop, sourceFall, bufferFall, sourceStart, bufferStart;
+ALuint sourceHop, bufferHop, sourceFall, bufferFall, bufferCoilyFall, sourceStart, bufferStart, bufferCoilyHop, sourceCoilyHop, sourceCoilyFall, bufferMenuSong, sourceMenuSong, bufferKilled, sourceKilled, sourceBallHop, bufferBallHop;
 GLFWwindow* window;
-GLfloat scaleCubeAnim, rotateCubeAnim;
-bool alive = true, pause = false, levelOver = false;
+glm::vec3 translateDiskAnimL(0.0f, 0.0f, 0.0f), translateDiskAnimR(0.0f, 0.0f, 0.0f), translateCoilyAnim(0.0f, 0.14f, -0.3f);
+string baseDir;
+std::vector<std::vector<Rasterize::Element *> *> grid;
+std::vector<Rasterize::Element *> nodes, qbertLives, redBalls, menuNodes, creatures;
+Rasterize::Element *purpleBall, *coily, *diskLeft, *diskRight, *qbert, *al;
+
 void moveQbert(int movementDir);
+void moveCreature(Rasterize::Element *creature, int movementDir);
+void resetCreatures();
+void hideCreatures();
 void initSound();
 void resetLevel1();
+void controlDisks();
+void initDiskPositions();
+void initRedBall(Rasterize::Element *redBall);
+bool compareNoCase(string first, string second);
 
 int Rasterize::glInitialize() {
 
@@ -59,9 +68,19 @@ int Rasterize::glInitialize() {
 Rasterize::~Rasterize() {
 
 	alDeleteSources(1, &sourceHop);
-    alDeleteBuffers(1, &bufferHop);
+	alDeleteSources(1, &sourceCoilyFall);
+	alDeleteSources(1, &sourceMenuSong);
+	alDeleteSources(1, &sourceFall);
+	alDeleteSources(1, &sourceBallHop);
+	alDeleteSources(1, &sourceStart);
+	alDeleteBuffers(1, &bufferHop);
+	alDeleteBuffers(1, &bufferFall);
+	alDeleteBuffers(1, &bufferStart);
+	alDeleteSources(1, &bufferCoilyFall);
+	alDeleteSources(1, &bufferMenuSong);
+	alDeleteSources(1, &bufferBallHop);
 
-    alutExit();
+	alutExit();
 
 }
 
@@ -93,6 +112,11 @@ Rasterize::Rasterize() {
 		system("PAUSE");
 		exit(1);
 	}
+	if (parseCreatures() != 0) {
+		cout << "Error occurred while creating creatures." << endl;
+		system("PAUSE");
+		exit(1);
+	}
 	if (parseEyeLocation() != 0) {
 		cout << "Error in reading eye location. Default values of [0, 0, 2] taken." << endl;
 		eyeLocation.x = 0;
@@ -116,7 +140,7 @@ Rasterize::Rasterize() {
 
 }
 
-bool Rasterize::compareNoCase(string first, string second) {
+bool compareNoCase(string first, string second) {
 
 	if (first.size() != second.size()) {
 		return (false);
@@ -168,7 +192,6 @@ int Rasterize::startGame() {
 	glm::mat4 translateViewMatBack = glm::translate(glm::mat4(1.0f), eyeLocation);
 	glm::mat4 viewMat, projectionMat;
 	GLfloat rotateX = 0.0f, rotateY = 0.0f, rotateZ = 0.0f;
-	glm::vec3 translate(0.0f);
 	glm::mat4 translateMat(1.0f), rotateMatX(1.0f), rotateMatY(1.0f), rotateMat(1.0f);
 	
 	initShaders();
@@ -177,12 +200,33 @@ int Rasterize::startGame() {
 	glfwSetFramebufferSizeCallback(window, changeWindow);
 	glfwSetKeyCallback(window, keyPressed);
 
+	menuNodes.push_back(qbert);
+	menuNodes.push_back(coily);
+	menuNodes.push_back(redBalls.at(0));
+	menuNodes.push_back(purpleBall);
+	menuNodes.push_back(al);
+	alSourcePlay(sourceMenuSong);
+	showMenu();
+	alSourceStop(sourceMenuSong);
+
 	double lastTime = glfwGetTime(), currentTime;
 	int frames = 0;
+
+	qbert->stateX = 6;
+	qbert->stateY = 0;
+	Rasterize::Element *cube = grid.at(qbert->stateX)->at(qbert->stateY);
+	glm::mat4 cubeTransform = cube->initTransform;
+	glm::vec3 translate(0.0f, 0.165f, -0.3f);
+
+	rotateMat = glm::rotate(glm::mat4(1.0f), 45.0f, glm::vec3(0.0f, 1.0f, 0.0f));
+	qbert->transform = glm::translate(glm::mat4(1.0f), translate) * cubeTransform * rotateMat;
+
 	alSourcePlay(sourceStart);
+	resetCreatures();
+	initDiskPositions();
 
 	do {
-		 projectionMat = glm::ortho(- windowWidth * 0.80f / (float)fittingWidth, windowWidth * 0.80f / (float)fittingWidth, - windowHeight / (float)fittingWidth, windowHeight / (float)fittingWidth, 100.0f, -100.0f);
+		projectionMat = glm::ortho(- windowWidth * 0.80f / (float)fittingWidth, windowWidth * 0.80f / (float)fittingWidth, - windowHeight / (float)fittingWidth, windowHeight / (float)fittingWidth, 100.0f, -100.0f);
 		viewMat = glm::mat4(1.0f);
 
 		currentTime = glfwGetTime();
@@ -203,10 +247,88 @@ int Rasterize::startGame() {
 
 	} while (glfwGetKey(window, GLFW_KEY_ESCAPE) != GLFW_PRESS && glfwWindowShouldClose(window) == 0);
 
+	gameOver = true;
 	glfwTerminate();
 
 	return 0;
 
+}
+
+void Rasterize::showMenu() {
+
+	glm::mat4 projectionMat, viewMat;
+
+	qbert->transform = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 0.0f)) * glm::scale(glm::mat4(1.0f), glm::vec3(4.0f, 4.0f, 4.0f)) * glm::rotate(glm::mat4(1.0f), 15.0f, glm::vec3(0.0f, 1.0f, 0.0f));
+	coily->transform = glm::translate(glm::mat4(1.0f), glm::vec3(-0.45f, -0.22f, 0.2f)) * glm::scale(glm::mat4(1.0f), glm::vec3(2.0f, 2.0f, 2.0f)) * glm::rotate(glm::mat4(1.0f), -25.0f, glm::vec3(0.0f, 1.0f, 0.0f));
+	redBalls.at(0)->transform = glm::translate(glm::mat4(1.0f), glm::vec3(0.8f, -0.33f, 0.2f)) * glm::scale(glm::mat4(1.0f), glm::vec3(1.5f, 1.5f, 1.5f)) * glm::rotate(glm::mat4(1.0f), 195.0f, glm::vec3(0.0f, 1.0f, 0.0f));
+	purpleBall->transform = glm::translate(glm::mat4(1.0f), glm::vec3(-0.8f, -0.33f, 0.2f)) * glm::scale(glm::mat4(1.0f), glm::vec3(1.5f, 1.5f, 1.5f)) * glm::rotate(glm::mat4(1.0f), 195.0f, glm::vec3(0.0f, 1.0f, 0.0f));
+	al->transform = glm::translate(glm::mat4(1.0f), glm::vec3(0.45f, -0.2f, 0.3f)) * glm::scale(glm::mat4(1.0f), glm::vec3(1.5f, 1.5f, 1.5f)) * glm::rotate(glm::mat4(1.0f), 215.0f, glm::vec3(0.0f, 1.0f, 0.0f));
+
+	do {
+		projectionMat = glm::perspective(45.0f, ((GLfloat)windowWidth / (GLfloat)windowHeight), (GLfloat)nearZ, 100.0f);
+		viewMat = glm::lookAt(-eyeLocation, glm::vec3(0, 0, 0), glm::vec3(0, 1, 0));
+
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+		for (Element *node : menuNodes) {
+			glUniformMatrix4fv(pVariable, 1, GL_FALSE, &projectionMat[0][0]);
+			glUniformMatrix4fv(vVariable, 1, GL_FALSE, &viewMat[0][0]);
+			glUniformMatrix4fv(tVariable, 1, GL_FALSE, &node->transform[0][0]);
+
+			ModelInfo *modelInfo = node->modelInfo;
+			std::vector<GLuint> indices;
+			glBindVertexArray(node->vertexArray);
+
+			for (MTL_TRIANGLES::const_iterator it = node->trianglesInMTL.begin(); it != node->trianglesInMTL.end(); it++) {
+				string groupName = it->first;
+				IndexInfo *indexInfo = node->indexInfo[groupName];
+				if (modelInfo->useVt && modelInfo->materials[groupName]->textureID != -1) {
+					glUniform1i(textPresentVar, 1);
+					glUniform1i(textureIDVar, 0);
+					glActiveTexture(GL_TEXTURE0);
+					glBindTexture(GL_TEXTURE_2D, modelInfo->materials[groupName]->textureID);
+				}
+				else {
+					glUniform1i(textPresentVar, 0);
+				}
+				glUniform3fv(kaVar, 1, &modelInfo->materials[groupName]->ka.x);
+				glUniform3fv(kdVar, 1, &modelInfo->materials[groupName]->kd.x);
+				glUniform3fv(ksVar, 1, &modelInfo->materials[groupName]->ks.x);
+				glUniform1f(NVar, modelInfo->materials[groupName]->N);
+				glUniform1i(fontVar, 0);
+
+				glBindBuffer(GL_ARRAY_BUFFER, node->primitiveBuffer);
+
+				glEnableVertexAttribArray(0);
+				glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Primitive), 0);
+
+				glEnableVertexAttribArray(1);
+				glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Primitive), (GLvoid *)sizeof(glm::vec3));
+
+				glEnableVertexAttribArray(2);
+				glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Primitive), (GLvoid *)(sizeof(glm::vec3) + sizeof(glm::vec3)));
+
+				glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, node->indexBuffer);
+				glDrawElements(GL_TRIANGLES, indexInfo->size, GL_UNSIGNED_INT, (GLvoid *)(indexInfo->startIndex * sizeof(GLuint)));
+	
+				glDisableVertexAttribArray(0);
+				glDisableVertexAttribArray(1);
+				glDisableVertexAttribArray(2);
+			}
+		}
+
+		string text = "Q*BERT!";
+		writeOnScreen(text, windowWidth - 180, 220, 50, glm::vec3((rand() / (float)RAND_MAX), (rand() / (float)RAND_MAX), (rand() / (float)RAND_MAX)));
+
+		text = "Press SPACE to continue.";
+		writeOnScreen(text, windowWidth - 400, 140, 32, glm::vec3(1.0f, 0.0f, 1.0f));
+		
+		glfwSwapBuffers(window);
+
+		glfwPollEvents();
+
+	} while (glfwGetKey(window, GLFW_KEY_SPACE) != GLFW_PRESS && glfwGetKey(window, GLFW_KEY_ESCAPE) != GLFW_PRESS && glfwWindowShouldClose(window) == 0);
+	
 }
 
 void Rasterize::initShaders() {
@@ -364,18 +486,25 @@ void Rasterize::draw(glm::mat4 viewMat, glm::mat4 projectionMat) {
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+	ALint stateFall, stateStart, stateKilled;
+	alGetSourcei(sourceFall, AL_SOURCE_STATE, &stateFall);
+	alGetSourcei(sourceStart, AL_SOURCE_STATE, &stateStart);
+	alGetSourcei(sourceKilled, AL_SOURCE_STATE, &stateKilled);
+	if (stateStart == AL_PLAYING || stateFall == AL_PLAYING || stateKilled == AL_PLAYING)
+		glfwSetKeyCallback(window, NULL);
+	else
+		glfwSetKeyCallback(window, keyPressed);
+
 	if (!alive) {
 		pause = true;
 		alive = true;
 		glfwSetKeyCallback(window, NULL);
-		scaleCubeAnim = 1.0f, rotateCubeAnim = 0.0f;
+		scaleCubeAnim = 1.0f, rotateCubeAnim = 0.0f, scaleQbertAnim = 1.0f;
 	}
 	else if (pause) {
-		ALint stateFall, stateStart;
-		alGetSourcei(sourceFall, AL_SOURCE_STATE, &stateFall);
-		alGetSourcei(sourceStart, AL_SOURCE_STATE, &stateStart);
-		if (stateFall == AL_PLAYING || stateStart == AL_PLAYING) {
+		if (stateFall == AL_PLAYING || stateStart == AL_PLAYING || stateKilled == AL_PLAYING) {
 			if (stateStart == AL_PLAYING) {
+				levelEnd = true;
 				scaleCubeAnim -= 0.0018f;
 				rotateCubeAnim += 1.0f;
 				for (int i = 0; i < BOARD_HEIGHT; i++) {
@@ -388,20 +517,63 @@ void Rasterize::draw(glm::mat4 viewMat, glm::mat4 projectionMat) {
 						cube->modelInfo->materials["top"]->ks = glm::vec3(rand3, rand2, rand1);
 					}
 				}
+				scaleQbertAnim += 0.0015f;
+				Element *qbertCube = grid.at(qbert->stateX)->at(qbert->stateY);
+				qbert->modelInfo->materials["Qzard_Material"]->ka += 0.0008f;
+				qbert->modelInfo->materials["Qzard_Material"]->ks += 0.0008f;
+				qbert->modelInfo->materials["Qzard_Material"]->kd += 0.0008f;
 			}
 		}
 		else {
 			pause = false;
-			if (lives > 0 && !levelOver) {
-				stateX = 7;
-				stateY = 0;
-				moveQbert(DOWN);
+			if (qbert->lives > 0 && !levelOver) {
+				if (!killedFlag) {
+					qbert->stateX = 7;
+					qbert->stateY = 0;
+					moveQbert(DOWN);
+				}
+				else {
+					resetCreatures();
+					killedFlag = false;
+				}
 			}
-			else
+			else {
+				killedFlag = false;
 				resetLevel1();
+				qbert->modelInfo->materials["Qzard_Material"]->ka = glm::vec3(0.588f, 0.588f, 0.588f);
+				qbert->modelInfo->materials["Qzard_Material"]->ks = glm::vec3(0.588f, 0.588f, 0.588f);
+				qbert->modelInfo->materials["Qzard_Material"]->kd = glm::vec3(0.588f, 0.588f, 0.588f);
+				levelEnd = false;
+			}
 			glfwSetKeyCallback(window, keyPressed);
 		}
 	}
+	else {
+		checkCollisions();
+	}
+
+	ALint stateCoilyFall;
+	alGetSourcei(sourceCoilyFall, AL_SOURCE_STATE, &stateCoilyFall);
+	if (stateCoilyFall == AL_PLAYING) {
+		Rasterize::Element *cube = grid.at(coily->stateX)->at(coily->stateY);
+		translateCoilyAnim.x = (rotateCoilyAnim == 135.0f) ? translateCoilyAnim.x - 0.0002f : translateCoilyAnim.x + 0.0002f;
+		translateCoilyAnim.y += 0.00005f;
+		scaleCoilyAnim -= 0.001f;
+		coilyAnimFlag = true;
+		coily->transform = glm::translate(glm::mat4(1.0f), translateCoilyAnim) * cube->initTransform * glm::scale(glm::mat4(1.0f), glm::vec3(scaleCoilyAnim, scaleCoilyAnim, scaleCoilyAnim)) * glm::rotate(glm::mat4(1.0f), rotateCoilyAnim, glm::vec3(0.0f, 1.0f, 0.0f));
+	}
+	else if (coilyAnimFlag) {
+		coily->display = false;
+		coilyAnimFlag = false;
+	}
+
+	if (!levelEnd) {
+		if (!killedFlag)
+			controlCreatures();
+		controlDisks();
+	}
+	else 
+		hideCreatures();
 
 	for (Element *node : nodes) {
 		if (!node->display)
@@ -455,14 +627,53 @@ void Rasterize::draw(glm::mat4 viewMat, glm::mat4 projectionMat) {
 	string text = "SCORE-" + to_string(score);
 	writeOnScreen(text, 32, 2 * windowHeight - 32, 40, glm::vec3(0.0f, (1.0f - score / 700.0f), 1.0f));
 
-	text = "LIVES-" + to_string(lives);
-	writeOnScreen(text, 32, 2 * windowHeight - 80, 40, glm::vec3((1.0f - lives / 3.0f), (lives / 3.0f), 0.0f));
+	text = "LIVES-" + to_string(qbert->lives);
+	writeOnScreen(text, 32, 2 * windowHeight - 80, 40, glm::vec3((1.0f - qbert->lives / 3.0f), (qbert->lives / 3.0f), 0.0f));
 
 	text = "LEVEL-" + to_string(level);
 	writeOnScreen(text, 2 * windowWidth - 340, 2 * windowHeight - 80, 40, glm::vec3(0.55f, 0.1f, 0.1f));
 
 	text = "PLAYER-" + to_string(1);
 	writeOnScreen(text, 2 * windowWidth - 340, 2 * windowHeight - 32, 40, glm::vec3(0.58f, 0.0f, 0.83f));
+
+	if (levelEnd) {
+		text = "LEVEL COMPLETE!";
+		writeOnScreen(text, windowWidth - 320, 80, 45, glm::vec3((rand() / (float)RAND_MAX), (rand() / (float)RAND_MAX), (rand() / (float)RAND_MAX)));
+	}
+
+}
+
+void Rasterize::checkCollisions() {
+
+	if (!onRightDisk && !onLeftDisk) {
+		for (Element *creature : creatures) {
+			if (creature->display && creature->stateX == qbert->stateX && creature->stateY == qbert->stateY) {
+				killedFlag = true;
+				qbert->lives--;
+				alive = false;
+				alSourcePlay(sourceKilled);
+
+				if (qbert->lives > 0) {		
+					Rasterize::Element *cube = grid.at(qbert->stateX)->at(qbert->stateY);
+					glm::mat4 cubeTransform = cube->initTransform;
+					glm::vec3 translate(0.0f, 0.165f, -0.3f);
+					glm::mat4 rotateMat;
+
+					rotateMat = glm::rotate(glm::mat4(1.0f), rotateQbert, glm::vec3(0.0f, 1.0f, 0.0f));
+					qbert->transform = glm::translate(glm::mat4(1.0f), translate) * cubeTransform * rotateMat;
+
+				}
+
+				for (int i = 0; i < qbert->lives; i++)
+					qbertLives.at(i)->display = true;
+
+				for (int i = 2; i > qbert->lives - 1; i--)
+					qbertLives.at(i)->display = false;
+
+				break;
+			}
+		}
+	}
 
 }
 
@@ -655,12 +866,6 @@ int Rasterize::parseEyeLocation() {
 	eyeLocation.x = 0;
 	eyeLocation.y = 0;
 	eyeLocation.z = 2;
-	lookAtVector.x = 0;
-	lookAtVector.y = 0;
-	lookAtVector.z = 0;
-	lookUpVector.x = 0;
-	lookUpVector.y = 1;
-	lookUpVector.z = 0;
 	return 0;
 
 }
@@ -1171,6 +1376,7 @@ int Rasterize::parseQbert() {
 	qbert = new Element();
 	qbert->modelInfo = new ModelInfo();
 	qbert->display = true;
+	qbert->lives = 3;
 
 	if (parseOBJMTL(objPath, qbert->modelInfo) != 0)
 		return 1;
@@ -1192,9 +1398,128 @@ int Rasterize::parseQbert() {
 		translate.x += 0.1f;
 	}
 
-	stateX = 7;
-	stateY = 0;
-	moveQbert(DOWN);
+
+
+	return 0;
+
+}
+
+int Rasterize::parseCreatures() {
+
+	string objPath = baseDir + "coily.obj";
+	glm::vec3 scale(0.12f, 0.12f, 0.12f);
+	GLfloat rotateX = 0.0f, rotateY = -180.0f;
+	glm::mat4 rotateMat;
+
+	coily = new Element();
+	coily->modelInfo = new ModelInfo();
+	coily->display = false;
+	coily->enemyDead = false;
+
+	if (parseOBJMTL(objPath, coily->modelInfo) != 0)
+		return 1;
+
+	rotateMat = glm::rotate(glm::mat4(1.0f), rotateX, glm::vec3(1.0f, 0.0f, 0.0f)) * glm::rotate(glm::mat4(1.0f), rotateY, glm::vec3(0.0f, 1.0f, 0.0f));
+	coily->initTransform = glm::scale(glm::mat4(1.0f), scale) * rotateMat;
+	normalizeVertices(coily, coily->initTransform);
+	nodes.push_back(coily);
+	scaleCoilyAnim = 1.0f;
+	creatures.push_back(coily);
+
+	objPath = baseDir + "red_ball.obj";
+	scale = glm::vec3(0.09f, 0.09f, 0.09f);
+
+	Element *redBallTemp = new Element();
+	redBallTemp->modelInfo = new ModelInfo();
+	redBallTemp->display = false;
+	redBallTemp->enemyDead = false;
+	redBalls.push_back(redBallTemp);
+	creatures.push_back(redBallTemp);
+
+	if (parseOBJMTL(objPath, redBallTemp->modelInfo) != 0)
+		return 1;
+
+	redBallTemp->initTransform = glm::scale(glm::mat4(1.0f), scale) * rotateMat;
+	normalizeVertices(redBallTemp, redBallTemp->initTransform);
+	nodes.push_back(redBallTemp);
+
+	redBallTemp = new Element();
+	redBallTemp->modelInfo = new ModelInfo();
+	redBallTemp->display = false;
+	redBallTemp->enemyDead = false;
+	redBalls.push_back(redBallTemp);
+	creatures.push_back(redBallTemp);
+
+	if (parseOBJMTL(objPath, redBallTemp->modelInfo) != 0)
+		return 1;
+
+	redBallTemp->initTransform = glm::scale(glm::mat4(1.0f), scale) * rotateMat;
+	normalizeVertices(redBallTemp, redBallTemp->initTransform);
+	nodes.push_back(redBallTemp);
+
+	objPath = baseDir + "purple_ball.obj";
+	scale = glm::vec3(0.09f, 0.09f, 0.09f);
+
+	purpleBall = new Element();
+	purpleBall->modelInfo = new ModelInfo();
+	purpleBall->display = false;
+	purpleBall->enemyDead = false;
+
+	if (parseOBJMTL(objPath, purpleBall->modelInfo) != 0)
+		return 1;
+
+	purpleBall->initTransform = glm::scale(glm::mat4(1.0f), scale) * rotateMat;
+	normalizeVertices(purpleBall, purpleBall->initTransform);
+	nodes.push_back(purpleBall);
+	creatures.push_back(purpleBall);
+
+	objPath = baseDir + "disk.obj";
+	scale = glm::vec3(0.25f, 0.03f, 0.25f);
+
+	diskLeft = new Element();
+	diskLeft->modelInfo = new ModelInfo();
+	diskLeft->display = false;
+	diskLeft->enemyDead = false;
+
+	if (parseOBJMTL(objPath, diskLeft->modelInfo) != 0)
+		return 1;
+
+	diskLeft->initTransform = glm::scale(glm::mat4(1.0f), scale) * rotateMat;
+	normalizeVertices(diskLeft, diskLeft->initTransform);
+	nodes.push_back(diskLeft);
+
+	objPath = baseDir + "disk.obj";
+	scale = glm::vec3(0.25f, 0.03f, 0.25f);
+
+	diskRight = new Element();
+	diskRight->modelInfo = new ModelInfo();
+	diskRight->display = false;
+	diskRight->enemyDead = false;
+
+	if (parseOBJMTL(objPath, diskRight->modelInfo) != 0)
+		return 1;
+
+	diskRight->initTransform = glm::scale(glm::mat4(1.0f), scale) * rotateMat;
+	normalizeVertices(diskRight, diskRight->initTransform);
+	nodes.push_back(diskRight);
+
+	objPath = baseDir + "al.obj";
+	scale = glm::vec3(0.2f, 0.2f, 0.2f);
+
+	al = new Element();
+	al->modelInfo = new ModelInfo();
+	al->display = false;
+	al->enemyDead = false;
+
+	if (parseOBJMTL(objPath, al->modelInfo) != 0)
+		return 1;
+
+	al->initTransform = glm::scale(glm::mat4(1.0f), scale);
+	normalizeVertices(al, al->initTransform);
+	nodes.push_back(al);
+	creatures.push_back(al);
+
+	initDiskPositions();
 
 	return 0;
 
@@ -1202,70 +1527,83 @@ int Rasterize::parseQbert() {
 
 void moveQbert(int movementDir) {
 
-	GLfloat rotateY;
-
 	switch (movementDir) {
 	case UP:
-		rotateY = -135.0f;
-		if (stateX + 1 > 6) {
-			lives--;
+		rotateQbert = -135.0f;
+		if (qbert->stateX + 1 > 6) {
+			if (qbert->stateY == 4 && diskRight->display) {
+				onRightDisk = true;
+				break;
+			}
+			qbert->lives--;
+			resetCreatures();
 			alive = false;
 			alSourcePlay(sourceFall);
 		}
 		else
-			stateX++;
+			qbert->stateX++;
 		break;
 	case DOWN:
-		rotateY = 45.0f;
-		if (stateX - 1 < 0 || stateY > stateX - 1) {
-			lives--;
+		rotateQbert = 45.0f;
+		if (qbert->stateX - 1 < 0 || qbert->stateY > qbert->stateX - 1) {
+			resetCreatures();
+			qbert->lives--;
 			alive = false;
 			alSourcePlay(sourceFall);
 		}
 		else 
-			stateX--;
+			qbert->stateX--;
 		break;
 	case LEFT:
-		rotateY = 135.0f;
-		if (stateY - 1 < 0) {
-			lives--;
+		rotateQbert = 135.0f;
+		if (qbert->stateY - 1 < 0) {
+			if (qbert->stateX == 2 && diskLeft->display) {
+				onLeftDisk = true;
+				break;
+			}
+			resetCreatures();
+			qbert->lives--;
 			alive = false;
 			alSourcePlay(sourceFall);
 		}
 		else 
-			stateY--;
+			qbert->stateY--;
 		break;
 	case RIGHT:
-		rotateY = -45.0f;
-		if (stateY + 1 > stateX) {
-			lives--;
+		rotateQbert = -45.0f;
+		if (qbert->stateY + 1 > qbert->stateX) {
+			resetCreatures();
+			qbert->lives--;
 			alive = false;
 			alSourcePlay(sourceFall);
 		}
 		else
-			stateY++;
+			qbert->stateY++;
 		break;
 	}
 
-	if (lives > 0) {		
-		Rasterize::Element *cube = grid.at(stateX)->at(stateY);
-		glm::mat4 cubeTransform = cube->initTransform;
-		glm::vec3 translate(0.0f, 0.165f, -0.3f);
-		glm::mat4 rotateMat;
-
-		rotateMat = glm::rotate(glm::mat4(1.0f), rotateY, glm::vec3(0.0f, 1.0f, 0.0f));
-		qbert->transform = glm::translate(glm::mat4(1.0f), translate) * cubeTransform * rotateMat;
-
-		if (!cube->stepped) {
-			cube->modelInfo->materials["top"]->ka = glm::vec3(0.0f, 0.0f, 1.0f);
-			cube->modelInfo->materials["top"]->kd = glm::vec3(0.0f, 0.0f, 1.0f);
-			cube->modelInfo->materials["top"]->ks = glm::vec3(0.0f, 0.0f, 1.0f);
-			cube->stepped = true;
-			cubeCount++;
-			score += 25;
+	if (qbert->lives > 0) {		
+		if (onRightDisk || onLeftDisk) {
+			glfwSetKeyCallback(window, NULL);
 		}
-		else
-			score -= 5;
+		else {
+			Rasterize::Element *cube = grid.at(qbert->stateX)->at(qbert->stateY);
+			glm::mat4 cubeTransform = cube->initTransform;
+			glm::vec3 translate(0.0f, 0.165f, -0.3f);
+			glm::mat4 rotateMat;
+
+			rotateMat = glm::rotate(glm::mat4(1.0f), rotateQbert, glm::vec3(0.0f, 1.0f, 0.0f));
+			qbert->transform = glm::translate(glm::mat4(1.0f), translate) * cubeTransform * rotateMat;
+
+			if (!cube->stepped) {
+				cube->modelInfo->materials["top"]->ka = glm::vec3(0.0f, 0.18f, 1.0f);
+				cube->modelInfo->materials["top"]->kd = glm::vec3(0.0f, 0.18f, 1.0f);
+				cube->modelInfo->materials["top"]->ks = glm::vec3(0.0f, 0.18f, 1.0f);
+				cube->stepped = true;
+				cubeCount++;
+				score += 25;
+			}
+		}
 	}
 
 	if (cubeCount >= 28) {
@@ -1274,10 +1612,10 @@ void moveQbert(int movementDir) {
 		alive = false;
 	}
 
-	for (int i = 0; i < lives; i++)
+	for (int i = 0; i < qbert->lives; i++)
 		qbertLives.at(i)->display = true;
 
-	for (int i = 2; i > lives - 1; i--)
+	for (int i = 2; i > qbert->lives - 1; i--)
 		qbertLives.at(i)->display = false;
 
 }
@@ -1289,32 +1627,80 @@ void resetLevel1() {
 	else
 		levelOver = false;
 
+	resetCreatures();
+	initDiskPositions();
+
 	for (int i = 0; i < BOARD_HEIGHT; i++) {
 		for (int j = 0; j <= i; j++) {
 			Rasterize::Element *cube = grid.at(i)->at(j);
-			cube->modelInfo->materials["top"]->ka = glm::vec3(0.0f, 0.8f, 1.0f);
-			cube->modelInfo->materials["top"]->kd = glm::vec3(0.0f, 0.8f, 1.0f);
-			cube->modelInfo->materials["top"]->ks = glm::vec3(0.0f, 0.8f, 1.0f);
+			cube->modelInfo->materials["top"]->ka = glm::vec3(0.0f, 0.85f, 1.0f);
+			cube->modelInfo->materials["top"]->kd = glm::vec3(0.0f, 0.85f, 1.0f);
+			cube->modelInfo->materials["top"]->ks = glm::vec3(0.0f, 0.85f, 1.0f);
 			cube->transform = glm::mat4(1.0f);
 			cube->stepped = false;
 		}
 	}
-	stateX = 7;
-	stateY = 0;
-	lives = 3;
+	qbert->lives = 3;
 	score = 0;
 	cubeCount = 0;
-	moveQbert(DOWN);
+	qbert->stateX = 6;
+	qbert->stateY = 0;
+	Rasterize::Element *cube = grid.at(qbert->stateX)->at(qbert->stateY);
+	glm::mat4 cubeTransform = cube->initTransform, rotateMat;
+	glm::vec3 translate(0.0f, 0.165f, -0.3f);
+
+	rotateMat = glm::rotate(glm::mat4(1.0f), 45.0f, glm::vec3(0.0f, 1.0f, 0.0f));
+	qbert->transform = glm::translate(glm::mat4(1.0f), translate) * cubeTransform * rotateMat;
 
 }
 
 void initSound() {
 
 	alutInit(0, NULL);
+	bufferMenuSong = alutCreateBufferFromFile("files/menuSong.wav");
 	bufferHop = alutCreateBufferFromFile("files/qbertHop.wav");
+	bufferCoilyHop = alutCreateBufferFromFile("files/coilyHop.wav");
+	bufferCoilyFall = alutCreateBufferFromFile("files/coilyFall.wav");
 	bufferFall = alutCreateBufferFromFile("files/qbertFall.wav");
 	bufferStart = alutCreateBufferFromFile("files/qbertStart.wav");
+	bufferKilled = alutCreateBufferFromFile("files/killed.wav");
+	bufferBallHop = alutCreateBufferFromFile("files/ballHop.wav");
 
+	alGenSources(1, &sourceMenuSong);
+	alSourcef(sourceMenuSong, AL_PITCH, 1);
+	alSourcef(sourceMenuSong, AL_GAIN, 1);
+	alSource3f(sourceMenuSong, AL_POSITION, 0, 0, 0);
+	alSource3f(sourceMenuSong, AL_VELOCITY, 0, 0, 0);
+	alSourcei(sourceMenuSong, AL_LOOPING, AL_TRUE);
+	alSourcei(sourceMenuSong, AL_BUFFER, bufferMenuSong);
+	alGenSources(1, &sourceBallHop);
+	alSourcef(sourceBallHop, AL_PITCH, 1);
+	alSourcef(sourceBallHop, AL_GAIN, 1);
+	alSource3f(sourceBallHop, AL_POSITION, 0, 0, 0);
+	alSource3f(sourceBallHop, AL_VELOCITY, 0, 0, 0);
+	alSourcei(sourceBallHop, AL_LOOPING, AL_FALSE);
+	alSourcei(sourceBallHop, AL_BUFFER, bufferBallHop);
+	alGenSources(1, &sourceKilled);
+	alSourcef(sourceKilled, AL_PITCH, 1);
+	alSourcef(sourceKilled, AL_GAIN, 1);
+	alSource3f(sourceKilled, AL_POSITION, 0, 0, 0);
+	alSource3f(sourceKilled, AL_VELOCITY, 0, 0, 0);
+	alSourcei(sourceKilled, AL_LOOPING, AL_FALSE);
+	alSourcei(sourceKilled, AL_BUFFER, bufferKilled);
+	alGenSources(1, &sourceCoilyFall);
+	alSourcef(sourceCoilyFall, AL_PITCH, 1);
+	alSourcef(sourceCoilyFall, AL_GAIN, 1);
+	alSource3f(sourceCoilyFall, AL_POSITION, 0, 0, 0);
+	alSource3f(sourceCoilyFall, AL_VELOCITY, 0, 0, 0);
+	alSourcei(sourceCoilyFall, AL_LOOPING, AL_FALSE);
+	alSourcei(sourceCoilyFall, AL_BUFFER, bufferCoilyFall);
+	alGenSources(1, &sourceCoilyHop);
+	alSourcef(sourceCoilyHop, AL_PITCH, 1);
+	alSourcef(sourceCoilyHop, AL_GAIN, 1);
+	alSource3f(sourceCoilyHop, AL_POSITION, 0, 0, 0);
+	alSource3f(sourceCoilyHop, AL_VELOCITY, 0, 0, 0);
+	alSourcei(sourceCoilyHop, AL_LOOPING, AL_FALSE);
+	alSourcei(sourceCoilyHop, AL_BUFFER, bufferCoilyHop);
 	alGenSources(1, &sourceHop);
 	alSourcef(sourceHop, AL_PITCH, 1);
 	alSourcef(sourceHop, AL_GAIN, 1);
@@ -1339,3 +1725,285 @@ void initSound() {
 
 }
 
+void resetCreatures() {
+
+	iterationCount1 = 1;
+	iterationCount2 = 1;
+	levelStartTime = clock();
+	for (Rasterize::Element *redBall : redBalls) {
+		redBall->enemyDead = false;
+		redBall->display = false;
+		redBall->stateX = 6;
+		redBall->stateY = 0;
+	}
+	redBalls.at(1)->enemyDead = true;
+	purpleBall->stateX = 6;
+	purpleBall->stateY = 0;
+	purpleBall->enemyDead = true;
+	coily->enemyDead = true;
+	purpleBall->display = false;
+	coily->display = false;
+	purpleTransformed = false;
+	scaleCoilyAnim = 1.0f;
+
+}
+
+void hideCreatures() {
+
+	for (Rasterize::Element *redBall : redBalls) {
+		redBall->enemyDead = false;
+		redBall->display = false;
+		redBall->stateX = 6;
+		redBall->stateY = 0;
+	}
+	coily->display = false;
+	purpleBall->display = false;
+	purpleBall->stateX = 6;
+	purpleBall->stateY = 0;
+
+}
+
+void Rasterize::controlCreatures() {
+
+	clock_t time = clock();
+
+	if (time - levelStartTime > 4000) {
+		bufferWait = false;
+		if (time - levelStartTime > 4000 + 4000 * iterationCount2) {
+			iterationCount2++;
+			for (Element *redBall : redBalls) {
+				if (redBall->enemyDead) {
+					redBall->enemyDead = false;
+					redBall->display = false;
+					redBall->stateX = 6;
+					redBall->stateY = 0;
+				}
+			}
+		}
+		if (time - levelStartTime > 4000 + 6000) {
+			if (purpleBall->enemyDead && !purpleTransformed) {
+				purpleBall->enemyDead = false;
+				purpleBall->stateX = 6;
+				purpleBall->stateY = 0;
+			}
+		}
+		if (time - levelStartTime > 4000 + 1000 * iterationCount1) {
+			iterationCount1++;
+			for (Element *redBall : redBalls) {
+				if (!redBall->enemyDead) {
+					redBall->display = true;
+					redBall->initDirection = ((rand() % 2) + 1) * 2;
+					moveCreature(redBall, redBall->initDirection);
+				}
+			}
+			if (!coily->enemyDead) {
+				coily->display = true;
+				movedFlag = false;
+				if (!movedFlag && coily->stateX < qbert->stateX) {
+					moveCreature(coily, UP);
+				}
+				else if (!movedFlag && coily->stateX > qbert->stateX) {
+					moveCreature(coily, DOWN);
+				}
+				if (!movedFlag && coily->stateY > qbert->stateY) {
+					moveCreature(coily, LEFT);
+				}
+				else if (!movedFlag && coily->stateY < qbert->stateY) {
+					moveCreature(coily, RIGHT);
+				}
+				if ((coily->stateX == 6 && onRightDisk) || (coily->stateY == 0 && onLeftDisk)) {
+					coily->enemyDead = true;
+					score += 50;
+					rotateCoilyAnim = (coily->stateX == 6) ? -135.0f : 135.0f;
+					alSourcePlay(sourceCoilyFall);
+				}
+			}
+			if (!purpleBall->enemyDead && !purpleTransformed) {
+				purpleBall->display = true;
+				purpleBall->initDirection = ((rand() % 2) + 1) * 2;
+				moveCreature(purpleBall, purpleBall->initDirection);
+			}
+		}
+	}
+
+}
+
+void initDiskPositions() {
+
+	diskLeft->display = true;
+	diskRight->display = true;
+
+	rotateDiskAnim = 0.0f;
+	translateDiskAnimL = glm::vec3(0.0f, 0.0f, 0.0f);
+	translateDiskAnimR = glm::vec3(0.0f, 0.0f, 0.0f);
+
+}
+
+void controlDisks() {
+
+	rotateDiskAnim += 2.0f;
+	glm::mat4 cubeTransform, rotateMat;
+	glm::vec3 translate;
+	Rasterize::Element *cube;
+	GLfloat rotateX = -40.0f;
+	
+	rotateMat = glm::rotate(glm::mat4(1.0f), rotateX, glm::vec3(1.0f, 0.0f, 0.0f)) * glm::rotate(glm::mat4(1.0f), rotateDiskAnim, glm::vec3(0.0f, 1.0f, 0.0f));
+
+	if (diskLeft->display) {
+		diskLeft->stateX = 2;
+		diskLeft->stateY = 0;
+		cube = grid.at(diskLeft->stateX)->at(diskLeft->stateY);
+		glm::mat4 cubeTransform = cube->initTransform;
+		translate = glm::vec3(-0.17f, 0.17f, -0.3f);
+
+		if (onLeftDisk) {
+			if (translateDiskAnimL.x < 0.4f) {
+				translateDiskAnimL.x += 0.00062f;
+				translateDiskAnimL.y += 0.0012f;
+				qbert->transform = glm::translate(glm::mat4(1.0f), glm::vec3(-0.005f, 0.12f, 0.0f)) * glm::translate(glm::mat4(1.0f), translateDiskAnimL) * glm::translate(glm::mat4(1.0f), translate) * cubeTransform;
+			}
+			else {
+				qbert->stateX = 6;
+				qbert->stateY = 0;
+				Rasterize::Element *cube = grid.at(qbert->stateX)->at(qbert->stateY);
+				glm::mat4 cubeTransform = cube->initTransform;
+				glm::vec3 translate(0.0f, 0.165f, -0.3f);
+
+				qbert->transform = glm::translate(glm::mat4(1.0f), translate) * cubeTransform;
+				onLeftDisk = false;
+				diskLeft->display = false;
+				glfwSetKeyCallback(window, keyPressed);
+			}
+		}
+		diskLeft->transform = glm::translate(glm::mat4(1.0f), translateDiskAnimL) * glm::translate(glm::mat4(1.0f), translate) * cubeTransform * rotateMat;
+	}
+
+	if (diskRight->display) {
+		diskRight->stateX = 6;
+		diskRight->stateY = 4;
+		cube = grid.at(diskRight->stateX)->at(diskRight->stateY);
+		cubeTransform = cube->initTransform;
+		translate = glm::vec3(0.17f, 0.17f, -0.3f);
+
+		if (onRightDisk) {			
+			if (translateDiskAnimR.x > -0.4f) {
+				translateDiskAnimR.x -= 0.00062f;
+				translateDiskAnimR.y += 0.0012f;
+				qbert->transform = glm::translate(glm::mat4(1.0f), glm::vec3(-0.005f, 0.12f, 0.0f)) * glm::translate(glm::mat4(1.0f), translateDiskAnimR) * glm::translate(glm::mat4(1.0f), translate) * cubeTransform;
+			}
+			else {
+				qbert->stateX = 6;
+				qbert->stateY = 0;
+				Rasterize::Element *cube = grid.at(qbert->stateX)->at(qbert->stateY);
+				glm::mat4 cubeTransform = cube->initTransform;
+				glm::vec3 translate(0.0f, 0.165f, -0.3f);
+
+				qbert->transform = glm::translate(glm::mat4(1.0f), translate) * cubeTransform;
+				onRightDisk = false;
+				diskRight->display = false;
+				glfwSetKeyCallback(window, keyPressed);
+			}
+		}
+		diskRight->transform = glm::translate(glm::mat4(1.0f), translateDiskAnimR) * glm::translate(glm::mat4(1.0f), translate) * cubeTransform * rotateMat;
+	}
+
+}
+
+void moveCreature(Rasterize::Element *creature, int movementDir) {
+
+	GLfloat rotateY;
+
+	switch (movementDir) {
+	case UP:
+		rotateY = -135.0f;
+		if (creature->stateX + 1 > 6) {
+		}
+		else {
+			creature->stateX++;
+			if (creature == coily)
+				alSourcePlay(sourceCoilyHop);
+			else
+				alSourcePlay(sourceBallHop);
+			movedFlag = true;
+		}
+		break;
+	case DOWN:
+		rotateY = 45.0f;
+		if (creature->stateX - 1 < 0 || creature->stateY > creature->stateX - 1) {
+			if (creature == redBalls.at(0) || creature == redBalls.at(1)) {
+				creature->enemyDead = true;
+				creature->display = false;
+				redBallDead++;
+			}
+			else if (creature == purpleBall) {
+				creature->display = false;
+				coily->enemyDead = false;
+				coily->stateX = creature->stateX;
+				coily->stateY = creature->stateY;
+				coily->display = true;
+				creature = coily;
+				purpleTransformed = true;
+			}
+		}
+		else {
+			creature->stateX--;
+			if (creature == coily)
+				alSourcePlay(sourceCoilyHop);
+			else
+				alSourcePlay(sourceBallHop);
+			movedFlag = true;
+		}
+		break;
+	case LEFT:
+		rotateY = 135.0f;
+		if (creature->stateY - 1 < 0) {
+		}
+		else {
+			creature->stateY--;	
+			if (creature == coily)
+				alSourcePlay(sourceCoilyHop);
+			else
+				alSourcePlay(sourceBallHop);
+			movedFlag = true;
+		}
+		break;
+	case RIGHT:
+		rotateY = -45.0f;
+		if (creature->stateY + 1 > creature->stateX) {
+			if (creature == redBalls.at(0) || creature == redBalls.at(1)) {
+				creature->enemyDead = true;
+				creature->display = false;
+				redBallDead++;
+			}
+			else if (creature == purpleBall) {
+				creature->display = false;
+				coily->enemyDead = false;
+				coily->stateX = creature->stateX;
+				coily->stateY = creature->stateY;
+				coily->display = true;
+				creature = coily;
+				purpleTransformed = true;
+			}
+		}
+		else {
+			creature->stateY++;
+			if (creature == coily)
+				alSourcePlay(sourceCoilyHop);
+			else
+				alSourcePlay(sourceBallHop);
+			movedFlag = true;
+		}
+		break;
+	}
+
+	if (creature->display) {		
+		Rasterize::Element *cube = grid.at(creature->stateX)->at(creature->stateY);
+		glm::mat4 cubeTransform = cube->initTransform;
+		glm::vec3 translate(0.0f, 0.14f, -0.3f);
+		glm::mat4 rotateMat;
+
+		rotateMat = glm::rotate(glm::mat4(1.0f), rotateY, glm::vec3(0.0f, 1.0f, 0.0f));
+		creature->transform = glm::translate(glm::mat4(1.0f), translate) * cubeTransform * rotateMat;
+	}
+
+}
