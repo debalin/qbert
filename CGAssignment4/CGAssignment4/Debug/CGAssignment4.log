@@ -1,14 +1,12 @@
-﻿Build started 12/10/2015 6:09:04 PM.
+﻿Build started 12/14/2015 5:10:37 AM.
      1>Project "D:\Indie\NC State\CSC 561\CSC561_A4_GM\CGAssignment4\CGAssignment4\CGAssignment4.vcxproj" on node 2 (Build target(s)).
-     1>ClCompile:
-         C:\Program Files (x86)\Microsoft Visual Studio 11.0\VC\bin\CL.exe /c /I"C:\Program Files (x86)\OpenAL 1.1 SDK\include" /Iincludes\ /ZI /nologo /W3 /WX- /sdl /Od /Oy- /D _MBCS /Gm /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Fo"Debug\\" /Fd"Debug\vc110.pdb" /Gd /TP /analyze- /errorReport:prompt Rasterize.cpp
-         Rasterize.cpp
-       Link:
-         C:\Program Files (x86)\Microsoft Visual Studio 11.0\VC\bin\link.exe /ERRORREPORT:PROMPT /OUT:"D:\Indie\NC State\CSC 561\CSC561_A4_GM\CGAssignment4\Debug\CGAssignment4.exe" /INCREMENTAL /NOLOGO /LIBPATH:"C:\Program Files (x86)\OpenAL 1.1 SDK\libs\Win32" lib\Win32\SOIL.lib opengl32.lib lib\Win32\glew32.lib lib\Win32\glfw3.lib OpenAL32.lib lib\Win32\alut.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"D:\Indie\NC State\CSC 561\CSC561_A4_GM\CGAssignment4\Debug\CGAssignment4.pdb" /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:"D:\Indie\NC State\CSC 561\CSC561_A4_GM\CGAssignment4\Debug\CGAssignment4.lib" /MACHINE:X86 Debug\main.obj
+     1>Link:
+         C:\Program Files (x86)\Microsoft Visual Studio 11.0\VC\bin\link.exe /ERRORREPORT:PROMPT /OUT:"D:\Indie\NC State\CSC 561\CSC561_A4_GM\CGAssignment4\Debug\CGAssignment4.exe" /INCREMENTAL /NOLOGO lib\Win32\SOIL.lib opengl32.lib lib\Win32\glew32.lib lib\Win32\glfw3.lib lib\Win32\OpenAL32.lib lib\Win32\alut.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"D:\Indie\NC State\CSC 561\CSC561_A4_GM\CGAssignment4\Debug\CGAssignment4.pdb" /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:"D:\Indie\NC State\CSC 561\CSC561_A4_GM\CGAssignment4\Debug\CGAssignment4.lib" /MACHINE:X86 Debug\main.obj
          Debug\Rasterize.obj
+     1>LINK : warning LNK4098: defaultlib 'MSVCRT' conflicts with use of other libs; use /NODEFAULTLIB:library
          CGAssignment4.vcxproj -> D:\Indie\NC State\CSC 561\CSC561_A4_GM\CGAssignment4\Debug\CGAssignment4.exe
      1>Done Building Project "D:\Indie\NC State\CSC 561\CSC561_A4_GM\CGAssignment4\CGAssignment4\CGAssignment4.vcxproj" (Build target(s)).
 
 Build succeeded.
 
-Time Elapsed 00:00:12.42
+Time Elapsed 00:00:02.49

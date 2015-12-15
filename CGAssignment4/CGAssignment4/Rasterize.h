@@ -19,9 +19,9 @@ using namespace std;
 #include "glm/gtc/type_ptr.hpp"
 #include "soil/src/SOIL.h"
 using namespace glm;
-#include <al.h>
-#include <alc.h>
-#include <alut/alut.h>
+#include "AL/al.h"
+#include "AL/alc.h"
+#include "AL/alut.h"
 
 #define MTL_HASHMAP std::unordered_map<string, MTL *>
 #define BUF_INDEX std::unordered_map<string, int>
@@ -32,6 +32,7 @@ using namespace glm;
 #define DOWN 2
 #define LEFT 3
 #define RIGHT 4
+#define GRAVITY 0.00012f
 
 class Rasterize {
 
@@ -80,16 +81,18 @@ public:
 	struct Element {
 		string objPath;
 		glm::mat4 initTransform, transform;
-		glm::vec3 initTranslate;
+		glm::vec3 initTranslate, animTranslate, animScale;
 		ModelInfo *modelInfo;
 		GLuint vertexArray, primitiveBuffer, indexBuffer;
+		GLfloat rotateAmount;
 		BUF_INDEX bufferIndex;
 		MTL_TRIANGLES trianglesInMTL;
 		MTL_INDICES indexInfo;
-		bool stepped, display, enemyDead, movedFlag;
-		int lives;
-		int stateX, stateY, initDirection, direction;
-		GLfloat velocityX, velocityY;
+		bool stepped, display, enemyDead, movedFlag, animate, startFlag, initFlag;
+		int lives, stateX, stateY, initDirection, direction, simulatedTime, sideBallTrack;
+		GLfloat velocityX, velocityY, velocityZ;
+		int killIntensity;
+		clock_t killTime;
 	};
 	struct FontInfo {
 		GLuint fontTextureID, fontArray, fontUVBufferID, fontVertexBufferID;
@@ -104,25 +107,29 @@ public:
 
 	Rasterize();
 	~Rasterize();
+
+	void initShaders();
+	void initFonts();
+	GLuint LoadShaders(const char* vertexFilePath, const char* fragmentFilePath);
+	int glInitialize();
+
 	int parseOBJMTL(string objPath, ModelInfo *modelInfo);
 	int parseInterfaceWindow(string windowPath);
 	int parseEyeLocation();
 	int parseLightSources(string lightPath);
-	void normalizeVertices(Element *node, glm::mat4 initTransform);
-	int createNormals(ModelInfo *modelInfo);
-	int startGame();
-	GLuint LoadShaders(const char* vertexFilePath, const char* fragmentFilePath);
-	void initShaders();
-	void draw(glm::mat4 viewMat, glm::mat4 projectionMat);
-	int glInitialize();
 	int parseBoard();
 	int parseQbert();
 	int parseCreatures();
+	void normalizeVertices(Element *node, glm::mat4 initTransform);
+	int createNormals(ModelInfo *modelInfo);
+
+	int startGame();
+	void draw(glm::mat4 viewMat, glm::mat4 projectionMat);
 	void controlCreatures();
 	void showMenu();
+	void showGameOver();
 	void checkCollisions();
-	int buildElement(Element *node, glm::mat4 parentTransform, std::ifstream &inputFile);
-	void initFonts();
+	void animate();
 	void writeOnScreen(string text, int startX, int startY, int sizeOfLetter, glm::vec3 color);
 
 };
