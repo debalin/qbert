@@ -1,4 +1,4 @@
-###Q-bert!
+###Q*bert!
 
 **Game Description** - This is a 3D rendition of Q*bert. I have tried to stay original to the game, but have changed some aspects and/or introduced new characters.
 
